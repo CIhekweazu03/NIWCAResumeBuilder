@@ -49,6 +49,9 @@ def create_experience_section(key_prefix):
     }
 
 def enhance_experience_descriptions(experience_sections):
+    """
+    Enhance the description for each experience section using the LLM.
+    """
     enhanced_sections = []
     for exp in experience_sections:
         if exp["description"]:
@@ -135,6 +138,9 @@ def create_activity_section(key_prefix):
     }
 
 def enhance_activity_descriptions(activity_sections):
+    """
+    Enhance the description for each activity section using the LLM.
+    """
     enhanced_sections = []
     for activity in activity_sections:
         if activity["description"]:
@@ -316,91 +322,70 @@ def save_resume_yaml(yaml_content, name, theme, timestamp):
 def create_render_script(name, timestamp):
     """
     Creates a bash script to render the YAML files into PDFs using RenderCV.
-    Designed to work with Streamlit Cloud and relative paths.
     
     Args:
         name (str): The name of the person
         timestamp (str): The timestamp used in the filenames
     
     Returns:
-        tuple: (script_path, output_dir) where script_path is the path to the created script
+        tuple: (script_name, output_dir) where script_name is the path to the created script
                and output_dir is the directory where PDFs will be saved
     """
-    # Format name for filenames (remove spaces and special characters)
+    # Format name for filenames
     formatted_name = "".join(x for x in name if x.isalnum())
     
-    # Use relative paths for better compatibility
-    # Get the directory where the script is running
-    script_content = """#!/bin/bash
-
-# Get the directory where this script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
-# Create base output directory in the same directory as the script
-BASE_OUTPUT_DIR="$SCRIPT_DIR/rendercv_output"
-PDF_OUTPUT_DIR="$BASE_OUTPUT_DIR/pdf_outputs"
-
-# Create yaml directory if it doesn't exist
-YAML_DIR="$SCRIPT_DIR/yamlfiles"
-mkdir -p "$YAML_DIR"
-
-# Define themes
-THEMES=("classic" "moderncv" "sb2nov" "engineeringresumes")
-
-# Create output directories
-for theme in "${THEMES[@]}"; do
-    mkdir -p "$PDF_OUTPUT_DIR/$theme"
-done
-
-# Process each theme
-for theme in "${THEMES[@]}"; do
-    # Use full paths for input and output
-    INPUT_YAML="$YAML_DIR/%s_%s_resume_${theme}_CV.yaml"
-    OUTPUT_DIR="$PDF_OUTPUT_DIR/$theme"
+    # Create output directory path - use absolute path to avoid navigation issues
+    output_dir = os.path.abspath("./rendercv_output/pdf_outputs")
     
-    echo "Processing theme: $theme"
-    echo "Input YAML: $INPUT_YAML"
-    echo "Output directory: $OUTPUT_DIR"
+    # Define themes list
+    themes = ["classic", "moderncv", "sb2nov", "engineeringresumes"]
     
-    # Run rendercv with explicit paths
-    rendercv render "$INPUT_YAML" --output-folder-name "$OUTPUT_DIR"
+    # Create the mkdir commands
+    mkdir_commands = "\n".join([f'mkdir -p "{output_dir}/{theme}"' for theme in themes])
     
-    # Check if PDF was generated
-    if [ $? -eq 0 ]; then
-        echo "Successfully generated PDF for $theme theme"
-    else
-        echo "Error generating PDF for $theme theme"
+    # Create the render commands with proper path handling
+    render_commands = "\n".join([
+        f'rendercv render "./yamlfiles/{formatted_name}_{timestamp}_resume_{theme}_CV.yaml" --output-folder-name "{output_dir}/{theme}"'
+        for theme in themes
+    ])
+    
+    script_content = f"""#!/bin/bash
+
+# Create output directories if they don't exist
+{mkdir_commands}
+
+# Render all themes
+{render_commands}
+
+# Move to output directory
+cd "{output_dir}"
+
+# Process each theme's output
+for theme in "classic" "moderncv" "sb2nov" "engineeringresumes"; do
+    pdf_file=$(find "./$theme" -type f -name "*.pdf")
+    if [ -n "$pdf_file" ]; then
+        pdf_name=$(basename "$pdf_file")
+        mv "$pdf_file" "./${{theme}}_$pdf_name"
+        rm -r "./$theme"
     fi
 done
 
-# Move PDFs to final location and clean up
-cd "$PDF_OUTPUT_DIR"
-for theme in "${THEMES[@]}"; do
-    if [ -d "$theme" ]; then
-        # Find PDF file in theme directory
-        find "$theme" -name "*.pdf" -type f -exec mv {} "./${theme}_$(basename {})" \;
-        # Remove theme directory
-        rm -r "$theme"
-    fi
-done
-
-echo "PDF generation complete. Files are available in: $PDF_OUTPUT_DIR"
-""" % (formatted_name, timestamp)
-
-    # Create script with timestamp in name
+echo "PDF generation complete. Files are available in: {output_dir}"
+"""
+    
+    # Create a unique script name with timestamp
     script_name = f"rendercv_script_{formatted_name}_{timestamp}.sh"
-    script_path = os.path.join(os.getcwd(), script_name)
     
-    # Write script content
+    # Save the script with full path
+    script_path = os.path.abspath(script_name)
     with open(script_path, 'w', encoding='utf-8') as f:
         f.write(script_content)
     
-    # Make script executable
+    # Make the script executable
     os.chmod(script_path, 0o755)
     
-    # Return the script path and the output directory path
-    output_dir = os.path.join(os.getcwd(), "rendercv_output", "pdf_outputs")
     return script_path, output_dir
+
 
 def run_render_script(script_path):
     """
