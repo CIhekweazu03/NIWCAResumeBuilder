@@ -477,13 +477,13 @@ def main():
         education_data = create_education_section(f"edu_{i}")
         if st.button(f"Delete Education #{i+1}", key=f"del_edu_{i}"):
             st.session_state.education_count -= 1
-            st.experimental_rerun()
+            st.rerun()
         education_sections.append(education_data)
         st.divider()
     
     if st.button("Add Education"):
         st.session_state.education_count += 1
-        st.experimental_rerun()
+        st.rerun()
     
     # Skills
     st.header("Skills (Optional)")
@@ -494,7 +494,7 @@ def main():
     if st.button("Add Skill"):
         if new_skill:
             st.session_state.skills.append(new_skill)
-            st.experimental_rerun()
+            st.rerun()
     
     for i, skill in enumerate(st.session_state.skills):
         col1, col2 = st.columns([3, 1])
@@ -503,7 +503,7 @@ def main():
         with col2:
             if st.button(f"Delete", key=f"del_skill_{i}"):
                 st.session_state.skills.pop(i)
-                st.experimental_rerun()
+                st.rerun()
     
     # Interests
     st.header("Interests (Optional)")
@@ -514,7 +514,7 @@ def main():
     if st.button("Add Interest"):
         if new_interest:
             st.session_state.interests.append(new_interest)
-            st.experimental_rerun()
+            st.rerun()
     
     for i, interest in enumerate(st.session_state.interests):
         col1, col2 = st.columns([3, 1])
@@ -523,7 +523,7 @@ def main():
         with col2:
             if st.button(f"Delete", key=f"del_interest_{i}"):
                 st.session_state.interests.pop(i)
-                st.experimental_rerun()
+                st.rerun()
     
     # Coursework
     st.header("Coursework (Optional)")
@@ -542,7 +542,7 @@ def main():
         with col2:
             if st.button(f"Delete", key=f"del_course_{i}"):
                 st.session_state.coursework.pop(i)
-                st.experimental_rerun()
+                st.rerun()
     
     # Certifications
     st.header("Certifications (Optional)")
@@ -561,7 +561,7 @@ def main():
         with col2:
             if st.button(f"Delete", key=f"del_cert_{i}"):
                 st.session_state.certifications.pop(i)
-                st.experimental_rerun()
+                st.rerun()
     
     # Accolades
     st.header("Accolades (Optional)")
@@ -580,7 +580,7 @@ def main():
         with col2:
             if st.button(f"Delete", key=f"del_accolade_{i}"):
                 st.session_state.accolades.pop(i)
-                st.experimental_rerun()
+                st.rerun()
     
     # Experience
     st.header("Work Experience")
@@ -595,13 +595,13 @@ def main():
         if i > 0:  # Allow deletion only if there's more than one experience
             if st.button(f"Delete Experience #{i+1}", key=f"del_exp_{i}"):
                 st.session_state.experience_count -= 1
-                st.experimental_rerun()
+                st.rerun()
         experience_sections.append(exp_data)
         st.divider()
     
     if st.button("Add Experience"):
         st.session_state.experience_count += 1
-        st.experimental_rerun()
+        st.rerun()
     
     # Activities
     st.header("Activities (Optional)")
@@ -614,13 +614,13 @@ def main():
         activity_data = create_activity_section(f"act_{i}")
         if st.button(f"Delete Activity #{i+1}", key=f"del_act_{i}"):
             st.session_state.activity_count -= 1
-            st.experimental_rerun()
+            st.rerun()
         activity_sections.append(activity_data)
         st.divider()
     
     if st.button("Add Activity"):
         st.session_state.activity_count += 1
-        st.experimental_rerun()
+        st.rerun()
     
     if st.button("Generate Resumes"):
         if not name or not email or not phone or not bio or not experience_sections:
