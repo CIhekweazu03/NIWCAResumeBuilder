@@ -97,6 +97,7 @@ Please format the output as follows:
 
 Do not include any personal information like name, contact details, or education.
 Do not include any new numbers and percentages in terms of impact. The only quantification of impact should be whatever the user literally states.
+If the user did include numbers and percentages, please make sure to keep them in as well.
 Do not create new sentences, independent/dependent clauses, or bullet points; rather improve what is already there.
 Always err on the side of caution to not add new bullet points and experience that the user did not previously state.
 Be articulate and succinct and do not use excessive jargon to fill in.
