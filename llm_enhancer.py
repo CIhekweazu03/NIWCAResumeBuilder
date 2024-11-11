@@ -81,6 +81,7 @@ def clean_bullet_points(text):
     result = re.sub(r'[•\*\-‣⁃◦→▪️●■]\s*', '', result)
     
     return result
+
 def create_prompt(experience):
     rag_data = get_rag_data_from_pdf()
     prompt = f"""
@@ -90,29 +91,35 @@ Here's a good bit of information about resumes generally speaking and a few good
 
 Based on the following information provided under 'Work Experience:', generate the new 'Experience' section of the student's professional resume. Reword and enhance upon the details to make them more compelling and suitable for inclusion in a professional resume.
 
-Please format the output as follows:
+Guidelines:
+
+**Format Requirements:**
+
+- **Important:** Do not use special symbols and characters because they can cause issues within the resume renderer.
+- Please format the output as follows:
 
 ### Experience ###
 (Enhanced experience content here)
 
-Do not include any personal information like name, contact details, or education.
-Do not include any new numbers and percentages in terms of impact. The only quantification of impact should be whatever the user literally states.
-If the user did include numbers and percentages, please make sure to keep them in as well.
-Do not create new sentences, independent/dependent clauses, or bullet points; rather improve what is already there.
-Always err on the side of caution to not add new bullet points and experience that the user did not previously state.
-Be articulate and succinct and do not use excessive jargon to fill in.
-When necessary, fix grammatical errors that the user made inside of the work experience.
-Finish any generated bullet points with a period.
-Do not add any extra empty lines between the geneerated bullet points. Simply one newline between the bullet points to ensure they are on separate lines.
-Your goal with this is to simply express what the user has done, rather than impress readers.
-The potential reader is expected to have some level of technical expertise in whatever field, so do not overexplain or restate the obvious. Example, rather than saying the X programming language or Y framework you can just say the language or framework in question.
+- Finish any generated bullet points with a period.
+- Do not add any extra empty lines between the generated bullet points. Simply one newline between the bullet points to ensure they are on separate lines.
+
+**Content Requirements:**
+
+- Do not include any personal information like name, contact details, or education.
+- Do not include any new numbers and percentages in terms of impact. The only quantification of impact should be whatever the user literally states.
+- Do not create new sentences, independent/dependent clauses, or bullet points; rather improve what is already there.
+- Always err on the side of caution to not add new bullet points and experiences that the user did not previously state.
+- Be articulate and succinct and do not use excessive jargon to fill in.
+- When necessary, fix grammatical errors that the user made inside of the work experience.
+- Your goal with this is to simply express what the user has done, rather than impress readers.
+- The potential reader is expected to have some level of technical expertise in the field, so do not overexplain or restate the obvious. For example, rather than saying the X programming language or Y framework, you can just say the language or framework in question.
 
 Work Experience:
 {experience}
 Assistant:
 """
     return prompt
-
 def generate_experience(prompt):
     bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
     try:
@@ -157,26 +164,31 @@ Here's reference information about federal resumes and examples of effective pro
 
 Based on the following information provided under 'Professional Summary:', generate an enhanced professional summary section suitable for a federal resume. Reword and improve the content while maintaining accuracy and federal resume formatting standards.
 
-Please format the output as follows:
+Guidelines:
+
+**Format Requirements:**
+
+- **Important:** Do not use special symbols and characters because they can cause issues within the resume renderer.
+- Please format the output as follows:
 
 ### Professional Summary ###
 (Enhanced professional summary here)
 
-Guidelines:
-Do not include any personal information like name, contact details, or education.
-Do not include any new numbers and percentages in terms of impact. The only quantification of impact should be whatever the user literally states.
-Do not create new sentences, independent/dependent clauses, or bullet points; rather improve what is already there.
-Always err on the side of caution to not add new bullet points and experience that the user did not previously state.
-Be articulate and succinct and do not use excessive jargon to fill in.
-When necessary, fix grammatical errors that the user made inside of the work experience.
-Finish any generated bullet points with a period.
-Do not add any extra empty lines between the geneerated bullet points. Simply one newline between the bullet points to ensure they are on separate lines.
-Your goal with this is to simply express what the user has done, rather than impress readers.
-The potential reader is expected to have some level of technical expertise in whatever field, so do not overexplain or restate the obvious. Example, rather than saying the X programming language or Y framework you can just say the language or framework in question.
-Format as a cohesive paragraph rather than bullet points
-End sentences with proper punctuation
-Maintain a formal, professional tone appropriate for federal positions
-Do not add new achievements or qualifications not mentioned in the original
+- Format as a cohesive paragraph rather than bullet points.
+- End sentences with proper punctuation.
+- Maintain a formal, professional tone appropriate for federal positions.
+
+**Content Requirements:**
+
+- Do not include any personal information like name, contact details, or education.
+- Do not include any new numbers and percentages in terms of impact; the only quantification of impact should be whatever the user literally states.
+- Do not create new sentences, independent/dependent clauses, or bullet points; rather improve what is already there.
+- Always err on the side of caution to not add new bullet points and experiences that the user did not previously state.
+- Be articulate and succinct and do not use excessive jargon to fill in.
+- When necessary, fix grammatical errors that the user made in the professional summary.
+- Your goal with this is to simply express what the user has done, rather than impress readers.
+- The potential reader is expected to have some level of technical expertise in the field, so do not overexplain or restate the obvious. For example, rather than saying the X programming language or Y framework, you can just say the language or framework in question.
+- Do not add new achievements or qualifications not mentioned in the original.
 
 Professional Summary:
 {bio}
@@ -228,26 +240,28 @@ Here's reference information about effective descriptions and examples: {rag_dat
 
 Based on the following information provided under 'Activities:', generate enhanced activity descriptions that highlight leadership, initiative, and impact while maintaining accuracy. Each activity should be compelling and suitable for a professional resume.
 
-Please format the output as follows:
-
-### Activities ###
-(Enhanced activity content here)
-
 Guidelines:
-- Each activity description MUST be formatted as a bullet point starting with "- "
-- Each bullet point MUST be on its own line
-- Each bullet point MUST end with a period
-- Do not include any personal information like name, contact details, or education
-- Do not include any new numbers and percentages in terms of impact; only use quantification that the user literally states
-- Do not create new activities or bullet points; only enhance what is already provided
-- Be articulate and succinct; avoid excessive jargon
-- Fix any grammatical errors in the original text
-- Use strong action verbs at the start of each bullet point
-- Focus on leadership, initiative, and impact when present in the original text
-- Keep technical terms concise (e.g., use "Python" instead of "Python programming language")
-- Maintain a professional tone throughout
-- Do not add empty lines between bullet points
-- Do not format as paragraphs - each item must be a separate bullet point
+
+**Format Requirements:**
+
+- **Important:** Do not use special symbols and characters because they can cause issues within the resume renderer.
+- Each activity description MUST be formatted as a bullet point starting with "- ".
+- Each bullet point MUST be on its own line.
+- Each bullet point MUST end with a period.
+- Do not add empty lines between bullet points.
+- Do not format as paragraphs—each item must be a separate bullet point.
+
+**Content Requirements:**
+
+- Do not include any personal information like name, contact details, or education.
+- Do not include any new numbers and percentages in terms of impact; only use quantification that the user literally states.
+- Do not create new activities or bullet points; only enhance what is already provided.
+- Be articulate and succinct; avoid excessive jargon.
+- Fix any grammatical errors in the original text.
+- Use strong action verbs at the start of each bullet point.
+- Focus on leadership, initiative, and impact when present in the original text.
+- Keep technical terms concise (e.g., use "Python" instead of "Python programming language").
+- Maintain a professional tone throughout.
 
 Activities:
 {activity}
