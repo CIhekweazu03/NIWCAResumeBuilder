@@ -303,19 +303,34 @@ def save_resume_yaml(yaml_content, name, theme, timestamp):
         str: The name of the saved file
     """
     # Create yamlfiles directory if it doesn't exist
-    if not os.path.exists('yamlfiles'):
-        os.makedirs('yamlfiles')
+    yaml_dir = os.path.abspath('yamlfiles')
+    if not os.path.exists(yaml_dir):
+        os.makedirs(yaml_dir)
+        print(f"Created directory: {yaml_dir}")
     
     # Format name (remove spaces and special characters)
     formatted_name = "".join(x for x in name if x.isalnum())
     
     # Create filename with user details
     filename = f"{formatted_name}_{timestamp}_resume_{theme}_CV.yaml"
-    filepath = os.path.join('yamlfiles', filename)
+    filepath = os.path.join(yaml_dir, filename)
     
     # Save the file
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(yaml_content)
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(yaml_content)
+        print(f"Successfully saved YAML file: {filepath}")
+        
+        # Verify file exists and has content
+        if os.path.exists(filepath):
+            size = os.path.getsize(filepath)
+            print(f"File exists with size: {size} bytes")
+        else:
+            print(f"WARNING: File was not created: {filepath}")
+            
+    except Exception as e:
+        print(f"Error saving YAML file: {str(e)}")
+        raise
     
     return filename
 
@@ -334,58 +349,73 @@ def create_render_script(name, timestamp):
     # Format name for filenames
     formatted_name = "".join(x for x in name if x.isalnum())
     
-    # Create output directory path - use absolute path to avoid navigation issues
-    output_dir = os.path.abspath("./rendercv_output/pdf_outputs")
+    # Create output directory path using absolute path
+    output_dir = os.path.abspath("rendercv_output/pdf_outputs")
     
-    # Define themes list
-    themes = ["classic", "moderncv", "sb2nov", "engineeringresumes"]
-    
-    # Create the mkdir commands
-    mkdir_commands = "\n".join([f'mkdir -p "{output_dir}/{theme}"' for theme in themes])
-    
-    # Create the render commands with proper path handling
-    render_commands = "\n".join([
-        f'rendercv render "./yamlfiles/{formatted_name}_{timestamp}_resume_{theme}_CV.yaml" --output-folder-name "{output_dir}/{theme}"'
-        for theme in themes
-    ])
+    # Current working directory for relative paths
+    current_dir = os.path.abspath(os.getcwd())
+    yaml_dir = os.path.join(current_dir, "yamlfiles")
     
     script_content = f"""#!/bin/bash
+set -e  # Exit on error
 
-# Create output directories if they don't exist
-{mkdir_commands}
+# Echo commands for debugging
+set -x
 
-# Render all themes
-{render_commands}
+# Create base output directory
+mkdir -p "{output_dir}"
 
-# Move to output directory
-cd "{output_dir}"
+echo "Created output directory: {output_dir}"
 
-# Process each theme's output
-for theme in "classic" "moderncv" "sb2nov" "engineeringresumes"; do
-    pdf_file=$(find "./$theme" -type f -name "*.pdf")
+# Debug: List yaml files
+echo "Contents of yaml directory:"
+ls -la "{yaml_dir}"
+
+# Process each theme
+for theme in classic moderncv sb2nov engineeringresumes; do
+    echo "Processing theme: $theme"
+    
+    # Construct input YAML path
+    yaml_path="{yaml_dir}/{formatted_name}_{timestamp}_resume_${{theme}}_CV.yaml"
+    echo "Looking for YAML file: $yaml_path"
+    
+    # Check if YAML file exists
+    if [ ! -f "$yaml_path" ]; then
+        echo "ERROR: YAML file not found: $yaml_path"
+        continue
+    fi
+    
+    # Create theme-specific directory
+    mkdir -p "{output_dir}/$theme"
+    
+    # Run rendercv command
+    rendercv render "$yaml_path" --output-folder-name "{output_dir}/$theme"
+    
+    # Move and rename the generated PDF
+    pdf_file=$(find "{output_dir}/$theme" -type f -name "*.pdf")
     if [ -n "$pdf_file" ]; then
-        pdf_name=$(basename "$pdf_file")
-        mv "$pdf_file" "./${{theme}}_$pdf_name"
-        rm -r "./$theme"
+        mv "$pdf_file" "{output_dir}/${{theme}}_$(basename "$pdf_file")"
+        rm -r "{output_dir}/$theme"
+    else
+        echo "No PDF found for theme: $theme"
     fi
 done
 
 echo "PDF generation complete. Files are available in: {output_dir}"
 """
     
-    # Create a unique script name with timestamp
+    # Create script with timestamp
     script_name = f"rendercv_script_{formatted_name}_{timestamp}.sh"
-    
-    # Save the script with full path
     script_path = os.path.abspath(script_name)
-    with open(script_path, 'w', encoding='utf-8') as f:
+    
+    # Write script with Unix line endings
+    with open(script_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(script_content)
     
-    # Make the script executable
+    # Make script executable
     os.chmod(script_path, 0o755)
     
     return script_path, output_dir
-
 
 def run_render_script(script_path):
     """
@@ -399,21 +429,50 @@ def run_render_script(script_path):
                and output is the script's output/error message
     """
     try:
-        # Run the script and capture output
-        result = subprocess.run(
-            ['/bin/bash', script_path],
+        # Run script with shell=True to ensure proper bash interpretation
+        # Capture both stdout and stderr
+        process = subprocess.run(
+            f'/bin/bash "{script_path}"',
+            shell=True,
             capture_output=True,
             text=True,
-            check=True
+            check=False  # Don't raise exception on non-zero exit
         )
-        return True, result.stdout
-    except subprocess.CalledProcessError as e:
-        # Return error message if script fails
-        return False, f"Error executing script: {e.stderr}"
+        
+        # Combine stdout and stderr for comprehensive output
+        output = f"STDOUT:\n{process.stdout}\nSTDERR:\n{process.stderr}"
+        
+        # Check if the process was successful
+        if process.returncode == 0:
+            return True, output
+        else:
+            return False, f"Script failed with exit code {process.returncode}\n{output}"
+            
     except Exception as e:
-        # Return error message for other exceptions
-        return False, f"Error: {str(e)}"
+        return False, f"Error executing script: {str(e)}"
 
+def sanitize_resume_data(data):
+    """
+    Recursively sanitize resume data by escaping special LaTeX characters.
+    Currently handles '$' by replacing it with '\$'.
+    
+    Args:
+        data: Can be a dictionary, list, or string containing resume data
+        
+    Returns:
+        The sanitized version of the input data with the same structure
+    """
+    if isinstance(data, dict):
+        return {key: sanitize_resume_data(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_resume_data(item) for item in data]
+    elif isinstance(data, str):
+        # Replace dollar signs with escaped version
+        # Using replace() instead of regex for simplicity and performance
+        return data.replace('$', '\\$')
+    else:
+        # Return unchanged if not a string, list, or dict
+        return data
 
 def main():
 
@@ -425,6 +484,19 @@ def main():
     if 'saved_yaml_files' not in st.session_state:
         st.session_state.saved_yaml_files = None
 
+    # Add these new initializations
+    if "temp_experience" not in st.session_state:
+        st.session_state.temp_experience = {}
+    if "experiences" not in st.session_state:
+        st.session_state.experiences = []
+    if "temp_education" not in st.session_state:
+        st.session_state.temp_education = {}
+    if "educations" not in st.session_state:
+        st.session_state.educations = []
+    if "temp_activity" not in st.session_state:
+        st.session_state.temp_activity = {}
+    if "activities" not in st.session_state:
+        st.session_state.activities = []
 
     st.title("Resume Builder")
     
@@ -447,28 +519,61 @@ def main():
     with col2:
         phone = st.text_input("Phone Number*\n\n(Please put phone number in the format of national code and then number i.e. a US number (803)-123-4567 should be in the format +18035555555)")
     
-    # Bio section
     st.header("Short Bio")
     bio = st.text_area("Tell us about yourself*")
     
     # Education
     st.header("Education (Optional)")
-    education_sections = []
-    if "education_count" not in st.session_state:
-        st.session_state.education_count = 0
-        
-    for i in range(st.session_state.education_count):
-        st.subheader(f"Education #{i+1}")
-        education_data = create_education_section(f"edu_{i}")
-        if st.button(f"Delete Education #{i+1}", key=f"del_edu_{i}"):
-            st.session_state.education_count -= 1
-            st.rerun()
-        education_sections.append(education_data)
-        st.divider()
     
-    if st.button("Add Education"):
-        st.session_state.education_count += 1
-        st.rerun()
+    # Form for adding new education
+    with st.expander("Add New Education"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state.temp_education["school"] = st.text_input("School Name", key="new_edu_school")
+            st.session_state.temp_education["type"] = st.selectbox(
+                "Education Type",
+                ["High School", "Undergraduate", "Graduate", "Doctoral Studies"],
+                key="new_edu_type"
+            )
+        with col2:
+            st.session_state.temp_education["gpa"] = st.number_input("GPA", min_value=0.0, max_value=10.0, step=0.1, key="new_edu_gpa")
+            st.session_state.temp_education["gpa_max"] = st.number_input("GPA Max", min_value=0.0, max_value=10.0, step=0.1, value=4.0, key="new_edu_gpa_max")
+        
+        st.session_state.temp_education["address"] = st.text_input("Address", key="new_edu_address")
+        col3, col4, col5 = st.columns(3)
+        with col3:
+            st.session_state.temp_education["city"] = st.text_input("City", key="new_edu_city")
+        with col4:
+            st.session_state.temp_education["state"] = st.text_input("State", key="new_edu_state")
+        with col5:
+            st.session_state.temp_education["zip"] = st.text_input("ZIP", key="new_edu_zip")
+
+        if st.button("Add Education"):
+            if st.session_state.temp_education["school"]:
+                st.session_state.educations.append(dict(st.session_state.temp_education))
+                st.session_state.temp_education = {}
+                st.rerun()
+            else:
+                st.error("Please enter at least the school name.")
+
+    # Display existing education entries
+    if st.session_state.educations:
+        st.subheader("Added Education")
+        for idx, edu in enumerate(st.session_state.educations):
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"**{edu['school']} - {edu['type']}**")
+                    if edu['gpa']:
+                        st.write(f"GPA: {edu['gpa']}/{edu['gpa_max']}")
+                    address_parts = [p for p in [edu['address'], edu['city'], edu['state'], edu['zip']] if p]
+                    if address_parts:
+                        st.write(", ".join(address_parts))
+                with col2:
+                    if st.button(f"Delete", key=f"del_edu_{idx}"):
+                        st.session_state.educations.pop(idx)
+                        st.rerun()
+                st.divider()
     
     # Skills
     st.header("Skills (Optional)")
@@ -570,45 +675,126 @@ def main():
     # Experience
     st.header("Work Experience")
     st.write("At least one complete work experience is required.")
-    experience_sections = []
-    if "experience_count" not in st.session_state:
-        st.session_state.experience_count = 1
-        
-    for i in range(st.session_state.experience_count):
-        st.subheader(f"Experience #{i+1}")
-        exp_data = create_experience_section(f"exp_{i}")
-        if i > 0:  # Allow deletion only if there's more than one experience
-            if st.button(f"Delete Experience #{i+1}", key=f"del_exp_{i}"):
-                st.session_state.experience_count -= 1
-                st.rerun()
-        experience_sections.append(exp_data)
-        st.divider()
     
-    if st.button("Add Experience"):
-        st.session_state.experience_count += 1
-        st.rerun()
+    # Form for adding new experience
+    with st.expander("Add New Experience", expanded=not st.session_state.experiences):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state.temp_experience["job_title"] = st.text_input("Job Title*", key="new_exp_title")
+            st.session_state.temp_experience["employer"] = st.text_input("Employer*", key="new_exp_employer")
+            st.session_state.temp_experience["start_date"] = st.date_input("Start Date*", key="new_exp_start")
+        with col2:
+            current = st.selectbox("Current Position?", ["Yes", "No"], key="new_exp_current")
+            st.session_state.temp_experience["current"] = current == "Yes"
+            if not st.session_state.temp_experience["current"]:
+                st.session_state.temp_experience["end_date"] = st.date_input(
+                    "End Date*",
+                    min_value=st.session_state.temp_experience["start_date"],
+                    key="new_exp_end"
+                )
+            st.session_state.temp_experience["location"] = st.text_input("Location*", key="new_exp_location")
+        
+        st.write("Description* (Enter each bullet point on a new line)")
+        description = st.text_area(
+            "Experience Description",
+            key="new_exp_description",
+            help="Enter each accomplishment or responsibility on a new line. These will be converted to bullet points."
+        )
+        st.session_state.temp_experience["description"] = description.split('\n') if description else []
+
+        if st.button("Add Experience"):
+            if (st.session_state.temp_experience["job_title"] and 
+                st.session_state.temp_experience["employer"] and 
+                st.session_state.temp_experience["location"] and 
+                st.session_state.temp_experience["description"]):
+                
+                # Add the current experience to the list
+                st.session_state.experiences.append(dict(st.session_state.temp_experience))
+                # Clear the temporary experience
+                st.session_state.temp_experience = {}
+                st.rerun()
+            else:
+                st.error("Please fill in all required fields.")
+
+    # Display existing experiences
+    if st.session_state.experiences:
+        st.subheader("Added Experiences")
+        for idx, exp in enumerate(st.session_state.experiences):
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"**{exp['job_title']} at {exp['employer']}**")
+                    st.write(f"Location: {exp['location']}")
+                    st.write(f"Duration: {exp['start_date']} - {'Present' if exp['current'] else exp['end_date']}")
+                    for bullet in exp['description']:
+                        if bullet.strip():  # Only display non-empty bullets
+                            st.write(f"• {bullet}")
+                with col2:
+                    if len(st.session_state.experiences) > 1 or idx > 0:  # Allow deletion only if not the last/only experience
+                        if st.button(f"Delete", key=f"del_exp_{idx}"):
+                            st.session_state.experiences.pop(idx)
+                            st.rerun()
+                st.divider()
     
     # Activities
     st.header("Activities (Optional)")
-    activity_sections = []
-    if "activity_count" not in st.session_state:
-        st.session_state.activity_count = 0
-        
-    for i in range(st.session_state.activity_count):
-        st.subheader(f"Activity #{i+1}")
-        activity_data = create_activity_section(f"act_{i}")
-        if st.button(f"Delete Activity #{i+1}", key=f"del_act_{i}"):
-            st.session_state.activity_count -= 1
-            st.rerun()
-        activity_sections.append(activity_data)
-        st.divider()
     
-    if st.button("Add Activity"):
-        st.session_state.activity_count += 1
-        st.rerun()
-    
+    # Form for adding new activity
+    with st.expander("Add New Activity"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state.temp_activity["position"] = st.text_input("Position*", key="new_act_position")
+            st.session_state.temp_activity["activity_name"] = st.text_input("Activity Name*", key="new_act_name")
+            st.session_state.temp_activity["start_date"] = st.date_input("Start Date*", key="new_act_start")
+        with col2:
+            current = st.selectbox("Current Activity?", ["Yes", "No"], key="new_act_current")
+            st.session_state.temp_activity["current"] = current == "Yes"
+            if not st.session_state.temp_activity["current"]:
+                st.session_state.temp_activity["end_date"] = st.date_input(
+                    "End Date*",
+                    min_value=st.session_state.temp_activity["start_date"],
+                    key="new_act_end"
+                )
+
+        st.write("Description* (Enter each bullet point on a new line)")
+        description = st.text_area(
+            "Activity Description",
+            key="new_act_description",
+            help="Enter each responsibility or achievement on a new line. These will be converted to bullet points."
+        )
+        st.session_state.temp_activity["description"] = description.split('\n') if description else []
+
+        if st.button("Add Activity"):
+            if (st.session_state.temp_activity["position"] and 
+                st.session_state.temp_activity["activity_name"] and 
+                st.session_state.temp_activity["description"]):
+                
+                st.session_state.activities.append(dict(st.session_state.temp_activity))
+                st.session_state.temp_activity = {}
+                st.rerun()
+            else:
+                st.error("Please fill in all required fields.")
+
+    # Display existing activities
+    if st.session_state.activities:
+        st.subheader("Added Activities")
+        for idx, activity in enumerate(st.session_state.activities):
+            with st.container():
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"**{activity['position']} at {activity['activity_name']}**")
+                    st.write(f"Duration: {activity['start_date']} - {'Present' if activity['current'] else activity['end_date']}")
+                    for bullet in activity['description']:
+                        if bullet.strip():  # Only display non-empty bullets
+                            st.write(f"• {bullet}")
+                with col2:
+                    if st.button(f"Delete", key=f"del_act_{idx}"):
+                        st.session_state.activities.pop(idx)
+                        st.rerun()
+                st.divider()
+
     if st.button("Generate Resumes"):
-        if not name or not email or not phone or not bio or not experience_sections:
+        if not name or not email or not phone or not bio or not st.session_state.experiences:
             st.error("Please fill in all required fields...")
         else:
             # Show a loading message while processing
@@ -617,10 +803,7 @@ def main():
                     # Generate single timestamp for all files
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     
-                    # Enhance experience and activity descriptions
-                    enhanced_experience = enhance_experience_descriptions(experience_sections)
-                    enhanced_activities = enhance_activity_descriptions(activity_sections) if activity_sections else []
-                    
+                    # Create resume data dictionary
                     resume_data = {
                         "personal_info": {
                             "name": name,
@@ -628,17 +811,18 @@ def main():
                             "phone": phone
                         },
                         "bio": bio,
-                        "education": education_sections,
+                        "education": st.session_state.educations,
                         "skills": st.session_state.skills,
                         "interests": st.session_state.interests,
                         "coursework": st.session_state.coursework,
                         "certifications": st.session_state.certifications,
                         "accolades": st.session_state.accolades,
-                        "experience": enhanced_experience,
-                        "activities": enhanced_activities
+                        "experience": enhance_experience_descriptions(st.session_state.experiences),
+                        "activities": enhance_activity_descriptions(st.session_state.activities)
                     }
                     
                     # List of themes
+                    resume_data = sanitize_resume_data(resume_data)
                     themes = ["sb2nov", "moderncv", "classic", "engineeringresumes"]
                     
                     # Generate and save YAML for each theme
