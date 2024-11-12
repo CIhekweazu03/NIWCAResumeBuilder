@@ -429,6 +429,22 @@ def run_render_script(script_path):
                and output is the script's output/error message
     """
     try:
+        # Get the output directory path
+        output_dir = os.path.abspath("rendercv_output/pdf_outputs")
+        
+        # Clean up existing PDFs in the output directory
+        # Note: In the final code, this cleanup won't be necessary as PDFs will be
+        # stored and retrieved from an S3 bucket instead of local storage
+        if os.path.exists(output_dir):
+            for filename in os.listdir(output_dir):
+                if filename.endswith('.pdf'):
+                    file_path = os.path.join(output_dir, filename)
+                    try:
+                        os.remove(file_path)
+                        print(f"Removed existing PDF: {file_path}")
+                    except Exception as e:
+                        print(f"Error removing {file_path}: {str(e)}")
+        
         # Run script with shell=True to ensure proper bash interpretation
         # Capture both stdout and stderr
         process = subprocess.run(
@@ -450,7 +466,7 @@ def run_render_script(script_path):
             
     except Exception as e:
         return False, f"Error executing script: {str(e)}"
-
+    
 def sanitize_resume_data(data):
     """
     Recursively sanitize resume data by escaping special LaTeX characters.
