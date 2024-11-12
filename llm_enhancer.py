@@ -101,6 +101,7 @@ Guidelines:
 ### Experience ###
 (Enhanced experience content here)
 
+- Do not have any comments/notes after the enhanced experience content.
 - Finish any generated bullet points with a period.
 - Do not add any extra empty lines between the generated bullet points. Simply one newline between the bullet points to ensure they are on separate lines.
 
@@ -132,7 +133,7 @@ def generate_experience(prompt):
             ]
         })
         response = bedrock.invoke_model(
-            modelId='anthropic.claude-3-5-sonnet-20240620-v1:0',
+            modelId='us.anthropic.claude-3-5-sonnet-20241022-v2:0',
             contentType='application/json',
             accept='application/json',
             body=request_body
@@ -174,6 +175,7 @@ Guidelines:
 ### Professional Summary ###
 (Enhanced professional summary here)
 
+- Do not have any comments/notes after the enhanced professional summary content.
 - Format as a cohesive paragraph rather than bullet points.
 - End sentences with proper punctuation.
 - Maintain a formal, professional tone appropriate for federal positions.
@@ -208,7 +210,7 @@ def generate_bio(prompt):
             ]
         })
         response = bedrock.invoke_model(
-            modelId='anthropic.claude-3-5-sonnet-20240620-v1:0',
+            modelId='us.anthropic.claude-3-5-sonnet-20241022-v2:0',
             contentType='application/json',
             accept='application/json',
             body=request_body
@@ -245,6 +247,12 @@ Guidelines:
 **Format Requirements:**
 
 - **Important:** Do not use special symbols and characters because they can cause issues within the resume renderer.
+- Please format the output as follows:
+
+### Activities ###
+(Enhanced activities content here)
+
+- Do not have any comments/notes after the enhanced activities content.
 - Each activity description MUST be formatted as a bullet point starting with "- ".
 - Each bullet point MUST be on its own line.
 - Each bullet point MUST end with a period.
@@ -281,7 +289,7 @@ def generate_activity(prompt):
             ]
         })
         response = bedrock.invoke_model(
-            modelId='anthropic.claude-3-5-sonnet-20240620-v1:0',
+            modelId='us.anthropic.claude-3-5-sonnet-20241022-v2:0',
             contentType='application/json',
             accept='application/json',
             body=request_body
