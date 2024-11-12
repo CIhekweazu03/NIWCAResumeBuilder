@@ -269,6 +269,7 @@ Guidelines:
 - Use strong action verbs at the start of each bullet point.
 - Focus on leadership, initiative, and impact when present in the original text.
 - Keep technical terms concise (e.g., use "Python" instead of "Python programming language").
+- Your goal with this is to simply express what the user has done, rather than impress readers.
 - Maintain a professional tone throughout.
 
 Activities:
@@ -379,12 +380,11 @@ def generate_enhanced_activity(activity):
 
 if __name__ == "__main__":
     user_experience = """
-• •Led development team of eight engineers in delivering enterprise software solu-
-tions.
+• •Led development team of eight engineers in delivering enterprise software solutions.
 • •Implemented Agile methodologies, resulting in faster project delivery.
 • •Managed million-dollar budget while maintaining project scope and deadlines.
 • •Developed and maintained client relationships across multiple major accounts.
-• •Introducedautomatedtestingframework,reducingbugreports.
+• •Introduced automated testing framework,reducing bug reports.
     """
     enhanced_experience = generate_enhanced_experience(user_experience)
     print("Enhanced Experience Section:")
