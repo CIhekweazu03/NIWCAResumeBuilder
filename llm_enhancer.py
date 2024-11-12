@@ -132,7 +132,7 @@ def generate_experience(prompt):
             ]
         })
         response = bedrock.invoke_model(
-            modelId='us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+            modelId='anthropic.claude-3-5-sonnet-20240620-v1:0',
             contentType='application/json',
             accept='application/json',
             body=request_body
@@ -208,7 +208,7 @@ def generate_bio(prompt):
             ]
         })
         response = bedrock.invoke_model(
-            modelId='us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+            modelId='anthropic.claude-3-5-sonnet-20240620-v1:0',
             contentType='application/json',
             accept='application/json',
             body=request_body
@@ -281,7 +281,7 @@ def generate_activity(prompt):
             ]
         })
         response = bedrock.invoke_model(
-            modelId='us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+            modelId='anthropic.claude-3-5-sonnet-20240620-v1:0',
             contentType='application/json',
             accept='application/json',
             body=request_body
