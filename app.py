@@ -9,11 +9,39 @@ from llm_enhancer import (
     generate_enhanced_bio,
     generate_enhanced_activity
 )
+import boto3
+from botocore.exceptions import ClientError
+import logging
+from typing import Dict, List, Tuple, Optional
+
+S3_BUCKET_NAME = "niwc-generated-resumes"
+PDF_OUTPUT_PATH = "rendercv_output/pdf_outputs"
+
 
 st.set_page_config(
     page_title="Resume Builder",
     page_icon="NIWC_Atlantic_Logo.jpg"
 )
+
+def format_phone_number(phone: str) -> str:
+    """
+    Safe to assume, for now, that this is for U.S. users only.
+    Converts phone number from (XXX) XXX-XXXX format to +1XXXXXXXXXX format.
+    
+    Args:
+        phone (str): Phone number in (XXX) XXX-XXXX format
+        
+    Returns:
+        str: Phone number in +1XXXXXXXXXX format
+    """
+    # Remove non-numeric characters
+    digits = ''.join(c for c in phone if c.isdigit())
+    
+    # Add country code if not present
+    if len(digits) == 10:
+        digits = '1' + digits
+        
+    return '+' + digits
 
 def create_experience_section(key_prefix):
     col1, col2 = st.columns(2)
@@ -490,6 +518,78 @@ def sanitize_resume_data(data):
         # Return unchanged if not a string, list, or dict
         return data
 
+def upload_pdfs_to_s3(
+    pdf_directory: str,
+    pdf_files: List[str],
+    user_name: str,
+    user_email: str
+) -> Tuple[bool, Dict[str, Optional[str]], str]:
+    """
+    Uploads generated PDF resumes to the NIWC S3 bucket and returns their URLs.
+    
+    Args:
+        pdf_directory (str): Local directory containing the PDF files
+        pdf_files (List[str]): List of PDF filenames to upload
+        user_name (str): Username for reference
+        user_email (str): User email for folder name
+        
+    Returns:
+        Tuple[bool, Dict[str, Optional[str]], str]: Success status, URLs dict, error message
+    """
+    try:
+        s3_client = boto3.client('s3')
+    except Exception as e:
+        return False, {}, f"Failed to initialize S3 client: {str(e)}"
+    
+    pdf_urls = {}
+    bucket_name = "niwc-generated-resumes"
+    
+    # Create folder name from name and email
+    folder_name = f"{user_name}_{user_email}".lower()
+    folder_name = "".join(c if c.isalnum() or c == '_' or c == '-' else '_' for c in folder_name)
+    
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    try:
+        for pdf_file in pdf_files:
+            s3_key = f"resumes/{folder_name}/{pdf_file}"
+            local_file_path = os.path.join(pdf_directory, pdf_file)
+            
+            if not os.path.exists(local_file_path):
+                logger.error(f"File not found: {local_file_path}")
+                pdf_urls[pdf_file] = None
+                continue
+                
+            try:
+                s3_client.upload_file(
+                    local_file_path,
+                    bucket_name,
+                    s3_key,
+                    ExtraArgs={
+                        'ContentType': 'application/pdf',
+                        'ContentDisposition': f'inline; filename="{pdf_file}"'
+                    }
+                )
+                
+                url = f"s3://{bucket_name}/{s3_key}"
+                pdf_urls[pdf_file] = url
+                logger.info(f"Successfully uploaded {pdf_file} to {url}")
+                    
+            except ClientError as e:
+                logger.error(f"Failed to upload {pdf_file}: {str(e)}")
+                pdf_urls[pdf_file] = None
+                
+    except Exception as e:
+        error_msg = f"An unexpected error occurred during S3 upload: {str(e)}"
+        logger.error(error_msg)
+        return False, pdf_urls, error_msg
+    
+    if any(url is None for url in pdf_urls.values()):
+        return False, pdf_urls, "Some files failed to upload. Check logs for details."
+        
+    return True, pdf_urls, ""
+
 def main():
 
     # Initialize session state for generated files if not exists
@@ -533,7 +633,7 @@ def main():
         name = st.text_input("Name*")
         email = st.text_input("Email*")
     with col2:
-        phone = st.text_input("Phone Number*\n\n(Please put phone number in the format of national code and then number i.e. a US number (803)-123-4567 should be in the format +18035555555)")
+        phone = st.text_input("Phone Number*\n\n(Please put phone number in the format of national code and then number i.e. a US number (803)-555-5555 should be in the format +18035555555)")
     
     st.header("Short Bio")
     bio = st.text_area("Tell us about yourself*")
@@ -886,6 +986,33 @@ def main():
         st.write(f"\nPDF files have been generated and are available in:")
         st.code(st.session_state.output_dir)
         
+        # Upload PDFs to S3
+        with st.spinner("Uploading PDFs to secure storage..."):
+            success, s3_urls, error_msg = upload_pdfs_to_s3(
+                st.session_state.output_dir,
+                st.session_state.generated_files,
+                name,
+                email
+            )
+            
+            if success:
+                st.success("PDFs uploaded successfully to S3!")
+                
+                # Store S3 URLs in session state for future reference
+                st.session_state.s3_urls = s3_urls
+                
+                st.write("\nYour resume PDFs are available at the following S3 locations:")
+                for pdf_file, s3_url in s3_urls.items():
+                    st.code(s3_url)
+                    
+                st.info("""
+                These S3 URIs can be used to access your resumes through AWS services. 
+                The PDFs are stored in a secure location and organized by your name.
+                """)
+            else:
+                st.error(f"Error uploading PDFs to S3: {error_msg}")
+                st.warning("Local downloads are still available below.")
+                     
         st.write("\nYou can download your PDFs here:")
         for pdf_file in st.session_state.generated_files:
             try:
