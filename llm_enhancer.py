@@ -101,7 +101,8 @@ Guidelines:
 ### Experience ###
 (Enhanced experience content here)
 
-- Do not have any comments/notes after the enhanced experience content.
+- Do not have any comments/notes after the enhanced experience content, any comments or notes should be before it.
+- If the provided content is empty or just has the word placeholder or some equivalent, just have blank space in place of any enhanced content or notes under ### Experience ###.
 - Finish any generated bullet points with a period.
 - Do not add any extra empty lines between the generated bullet points. Simply one newline between the bullet points to ensure they are on separate lines.
 
@@ -175,7 +176,8 @@ Guidelines:
 ### Professional Summary ###
 (Enhanced professional summary here)
 
-- Do not have any comments/notes after the enhanced professional summary content.
+- Do not have any comments/notes after the enhanced professional summary content, any comments or notes should be before it.
+- If the provided content is empty or just has the word placeholder or some equivalent, just have blank space in place of any enhanced content or notes under ### Professional Summary ###.
 - Format as a cohesive paragraph rather than bullet points.
 - End sentences with proper punctuation.
 - Maintain a formal, professional tone appropriate for federal positions.
@@ -252,7 +254,8 @@ Guidelines:
 ### Activities ###
 (Enhanced activities content here)
 
-- Do not have any comments/notes after the enhanced activities content.
+- Do not have any comments/notes after the enhanced activities content, any comments or notes should be before it.
+- If the provided content is empty or just has the word placeholder or some equivalent, just have blank space in place of any enhanced content or notes under ### Activities ###.
 - Each activity description MUST be formatted as a bullet point starting with "- ".
 - Each bullet point MUST be on its own line.
 - Each bullet point MUST end with a period.
@@ -384,7 +387,7 @@ if __name__ == "__main__":
 • •Implemented Agile methodologies, resulting in faster project delivery.
 • •Managed million-dollar budget while maintaining project scope and deadlines.
 • •Developed and maintained client relationships across multiple major accounts.
-• •Introduced automated testing framework,reducing bug reports.
+• •Introduced automated testing framework, reducing bug reports.
     """
     enhanced_experience = generate_enhanced_experience(user_experience)
     print("Enhanced Experience Section:")
