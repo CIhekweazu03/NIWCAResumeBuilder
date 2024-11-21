@@ -445,56 +445,65 @@ echo "PDF generation complete. Files are available in: {output_dir}"
     
     return script_path, output_dir
 
-def run_render_script(script_path):
+def run_render_script(script_path: str) -> Tuple[bool, str, List[str]]:
     """
-    Executes the generated render script and captures its output.
+    Execute render script and track generated PDFs.
     
     Args:
         script_path (str): Path to the render script
-    
+        
     Returns:
-        tuple: (success, output) where success is a boolean indicating if the script ran successfully
-               and output is the script's output/error message
+        Tuple[bool, str, List[str]]: 
+            - Success status
+            - Error message (empty if successful)
+            - List of generated PDF filenames
     """
     try:
-        # Get the output directory path
+        # Ensure output directory exists and is empty
         output_dir = os.path.abspath("rendercv_output/pdf_outputs")
+        os.makedirs(output_dir, exist_ok=True)
         
-        # Clean up existing PDFs in the output directory
-        # Note: In the final code, this cleanup won't be necessary as PDFs will be
-        # stored and retrieved from an S3 bucket instead of local storage
-        if os.path.exists(output_dir):
-            for filename in os.listdir(output_dir):
-                if filename.endswith('.pdf'):
-                    file_path = os.path.join(output_dir, filename)
-                    try:
-                        os.remove(file_path)
-                        print(f"Removed existing PDF: {file_path}")
-                    except Exception as e:
-                        print(f"Error removing {file_path}: {str(e)}")
-        
+        # Clean output directory before generating new PDFs
+        for file in os.listdir(output_dir):
+            if file.endswith('.pdf'):
+                file_path = os.path.join(output_dir, file)
+                try:
+                    os.remove(file_path)
+                    st.write(f"Removed existing PDF: {file_path}")
+                except Exception as e:
+                    st.warning(f"Error removing {file_path}: {str(e)}")
+
         # Run script with shell=True to ensure proper bash interpretation
-        # Capture both stdout and stderr
         process = subprocess.run(
             f'/bin/bash "{script_path}"',
             shell=True,
             capture_output=True,
             text=True,
-            check=False  # Don't raise exception on non-zero exit
+            check=False
         )
         
-        # Combine stdout and stderr for comprehensive output
-        output = f"STDOUT:\n{process.stdout}\nSTDERR:\n{process.stderr}"
+        # Get all PDFs in output directory - these are all new since we cleaned the directory
+        new_pdfs = [f for f in os.listdir(output_dir) if f.endswith('.pdf')]
         
+        # Verify we have the expected number of PDFs
+        if len(new_pdfs) != 4:  # We expect exactly 4 PDFs (one for each theme)
+            error_msg = f"Expected 4 PDFs, but found {len(new_pdfs)}"
+            st.error(error_msg)
+            return False, error_msg, []
+            
         # Check if the process was successful
-        if process.returncode == 0:
-            return True, output
-        else:
-            return False, f"Script failed with exit code {process.returncode}\n{output}"
+        if process.returncode != 0:
+            error_msg = f"Script failed with exit code {process.returncode}\n{process.stderr}"
+            st.error(error_msg)
+            return False, error_msg, []
+            
+        return True, "", new_pdfs
             
     except Exception as e:
-        return False, f"Error executing script: {str(e)}"
-    
+        error_msg = f"Error executing script: {str(e)}"
+        st.error(error_msg)
+        return False, error_msg, []
+      
 def sanitize_resume_data(data):
     """
     Recursively sanitize resume data by escaping special LaTeX characters.
@@ -525,71 +534,81 @@ def upload_pdfs_to_s3(
     user_email: str
 ) -> Tuple[bool, Dict[str, Optional[str]], str]:
     """
-    Uploads generated PDF resumes to the NIWC S3 bucket and returns their URLs.
+    Upload only the PDFs generated in the current run to S3 bucket.
     
     Args:
         pdf_directory (str): Local directory containing the PDF files
-        pdf_files (List[str]): List of PDF filenames to upload
-        user_name (str): Username for reference
-        user_email (str): User email for folder name
+        pdf_files (List[str]): List of PDF filenames from current run
+        user_name (str): Username for folder name
+        user_email (str): User email for folder organization
         
     Returns:
-        Tuple[bool, Dict[str, Optional[str]], str]: Success status, URLs dict, error message
+        Tuple[bool, Dict[str, Optional[str]], str]: 
+            - Success status
+            - Dictionary mapping PDF filenames to their S3 URIs (None if upload failed)
+            - Error message (empty string if successful)
     """
     try:
+        if not pdf_files:
+            return False, {}, "No PDF files provided for upload"
+
         s3_client = boto3.client('s3')
-    except Exception as e:
-        return False, {}, f"Failed to initialize S3 client: {str(e)}"
-    
-    pdf_urls = {}
-    bucket_name = "niwc-generated-resumes"
-    
-    # Create folder name from name and email
-    folder_name = f"{user_name}_{user_email}".lower()
-    folder_name = "".join(c if c.isalnum() or c == '_' or c == '-' else '_' for c in folder_name)
-    
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-    
-    try:
+        pdf_uris = {}
+        bucket_name = "niwc-generated-resumes"
+        
+        # Create folder name from user info
+        folder_name = f"{user_name}_{user_email}".lower()
+        folder_name = "".join(c if c.isalnum() or c == '_' or c == '-' else '_' 
+                            for c in folder_name)
+
+        # Upload only the specified PDF files from current run
         for pdf_file in pdf_files:
-            s3_key = f"resumes/{folder_name}/{pdf_file}"
             local_file_path = os.path.join(pdf_directory, pdf_file)
             
+            # Verify file exists before attempting upload
             if not os.path.exists(local_file_path):
-                logger.error(f"File not found: {local_file_path}")
-                pdf_urls[pdf_file] = None
+                st.error(f"PDF file not found: {local_file_path}")
+                pdf_uris[pdf_file] = None
                 continue
-                
+            
             try:
+                # Construct S3 key with user's folder
+                s3_key = f"resumes/{folder_name}/{pdf_file}"
+                
+                # Upload file with metadata
                 s3_client.upload_file(
                     local_file_path,
                     bucket_name,
                     s3_key,
                     ExtraArgs={
                         'ContentType': 'application/pdf',
-                        'ContentDisposition': f'inline; filename="{pdf_file}"'
+                        'ContentDisposition': f'inline; filename="{pdf_file}"',
+                        'Metadata': {
+                            'username': user_name,
+                            'email': user_email,
+                            'upload_timestamp': datetime.now().isoformat()
+                        }
                     }
                 )
                 
-                url = f"s3://{bucket_name}/{s3_key}"
-                pdf_urls[pdf_file] = url
-                logger.info(f"Successfully uploaded {pdf_file} to {url}")
-                    
-            except ClientError as e:
-                logger.error(f"Failed to upload {pdf_file}: {str(e)}")
-                pdf_urls[pdf_file] = None
+                # Store S3 URI for the uploaded file
+                uri = f"s3://{bucket_name}/{s3_key}"
+                pdf_uris[pdf_file] = uri
+                st.success(f"Successfully uploaded {pdf_file}")
                 
+            except ClientError as e:
+                st.error(f"Failed to upload {pdf_file}: {str(e)}")
+                pdf_uris[pdf_file] = None
+        
+        if not any(uri is not None for uri in pdf_uris.values()):
+            return False, pdf_uris, "No PDF files were successfully uploaded"
+            
+        return True, pdf_uris, ""
+        
     except Exception as e:
         error_msg = f"An unexpected error occurred during S3 upload: {str(e)}"
-        logger.error(error_msg)
-        return False, pdf_urls, error_msg
-    
-    if any(url is None for url in pdf_urls.values()):
-        return False, pdf_urls, "Some files failed to upload. Check logs for details."
-        
-    return True, pdf_urls, ""
-
+        st.error(error_msg)
+        return False, {}, error_msg
 def main():
 
     # Initialize session state for generated files if not exists
@@ -952,81 +971,64 @@ def main():
                     st.session_state.saved_yaml_files = saved_files
 
                     # Create and run the render script
-                    try:
-                        script_name, output_dir = create_render_script(name, timestamp)
-                        success, script_output = run_render_script(script_name)
+                    script_path, output_dir = create_render_script(name, timestamp)
+                    success, error_msg, new_pdfs = run_render_script(script_path)
+                    
+                    if success:
+                        # Save only new PDFs to session state
+                        st.session_state.output_dir = output_dir
+                        st.session_state.generated_files = new_pdfs
                         
-                        if success:
-                            # Save output directory to session state
-                            st.session_state.output_dir = output_dir
+                        # Upload PDFs to S3
+                        with st.spinner("Uploading PDFs to secure storage..."):
+                            success, s3_urls, error_msg = upload_pdfs_to_s3(
+                                output_dir,
+                                new_pdfs,
+                                name,
+                                email
+                            )
                             
-                            # Get and save PDF files to session state
-                            pdf_files = [f for f in os.listdir(output_dir) if f.endswith('.pdf')]
-                            st.session_state.generated_files = pdf_files
-                            
-                            # Display success message
-                            st.success("Resume generation complete!")
-                        else:
-                            st.error("Failed to generate PDFs. Error message:")
-                            st.code(script_output)
-                            
-                    except Exception as e:
-                        st.error(f"Error during PDF generation: {str(e)}")
-                
+                            if success:
+                                st.success("PDFs uploaded successfully to S3!")
+                                st.session_state.s3_urls = s3_urls
+                                
+                                st.write("\nYour resume PDFs are available at the following S3 locations:")
+                                for pdf_file, s3_url in s3_urls.items():
+                                    if s3_url:  # Only show successfully uploaded files
+                                        st.code(s3_url)
+                            else:
+                                st.error(f"Error uploading PDFs to S3: {error_msg}")
+                                st.warning("Local downloads are still available below.")
+                    else:
+                        st.error(f"Failed to generate PDFs: {error_msg}")
+                        
                 except Exception as e:
                     st.error(f"An error occurred during resume generation: {str(e)}")
 
-    # Display generated files information (outside the generate button)
-    if st.session_state.saved_yaml_files:
-        st.write("Generated YAML files (saved in 'yamlfiles' directory):")
-        for file in st.session_state.saved_yaml_files:
-            st.write(f"- {file}")
+                # Display generated files information (outside the generate button)
+                if st.session_state.saved_yaml_files:
+                    st.write("Generated YAML files (saved in 'yamlfiles' directory):")
+                    for file in st.session_state.saved_yaml_files:
+                        st.write(f"- {file}")
 
-    if st.session_state.output_dir and st.session_state.generated_files:
-        st.write(f"\nPDF files have been generated and are available in:")
-        st.code(st.session_state.output_dir)
-        
-        # Upload PDFs to S3
-        with st.spinner("Uploading PDFs to secure storage..."):
-            success, s3_urls, error_msg = upload_pdfs_to_s3(
-                st.session_state.output_dir,
-                st.session_state.generated_files,
-                name,
-                email
-            )
-            
-            if success:
-                st.success("PDFs uploaded successfully to S3!")
-                
-                # Store S3 URLs in session state for future reference
-                st.session_state.s3_urls = s3_urls
-                
-                st.write("\nYour resume PDFs are available at the following S3 locations:")
-                for pdf_file, s3_url in s3_urls.items():
-                    st.code(s3_url)
+                if st.session_state.output_dir and st.session_state.generated_files:
+                    st.write(f"\nPDF files have been generated and are available in:")
+                    st.code(st.session_state.output_dir)
                     
-                st.info("""
-                These S3 URIs can be used to access your resumes through AWS services. 
-                The PDFs are stored in a secure location and organized by your name.
-                """)
-            else:
-                st.error(f"Error uploading PDFs to S3: {error_msg}")
-                st.warning("Local downloads are still available below.")
-                     
-        st.write("\nYou can download your PDFs here:")
-        for pdf_file in st.session_state.generated_files:
-            try:
-                with open(os.path.join(st.session_state.output_dir, pdf_file), 'rb') as f:
-                    pdf_data = f.read()
-                    st.download_button(
-                        label=f"Download {pdf_file}",
-                        data=pdf_data,
-                        file_name=pdf_file,
-                        mime='application/pdf',
-                        key=f"download_{pdf_file}"  # Unique key for each button
-                    )
-            except Exception as e:
-                st.warning(f"Unable to create download button for {pdf_file}: {str(e)}")
+                    st.write("\nYou can download your PDFs here:")
+                    for pdf_file in st.session_state.generated_files:
+                        try:
+                            with open(os.path.join(st.session_state.output_dir, pdf_file), 'rb') as f:
+                                pdf_data = f.read()
+                                st.download_button(
+                                    label=f"Download {pdf_file}",
+                                    data=pdf_data,
+                                    file_name=pdf_file,
+                                    mime='application/pdf',
+                                    key=f"download_{pdf_file}"
+                                )
+                        except Exception as e:
+                            st.warning(f"Unable to create download button for {pdf_file}: {str(e)}")
 
 if __name__ == "__main__":
     main()
