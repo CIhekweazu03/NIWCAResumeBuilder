@@ -19,7 +19,7 @@ PDF_OUTPUT_PATH = "rendercv_output/pdf_outputs"
 
 
 st.set_page_config(
-    page_title="Resume Builder",
+    page_title="Resume Builder Demo",
     page_icon="NIWC_Atlantic_Logo.jpg"
 )
 
@@ -633,11 +633,11 @@ def main():
     if "activities" not in st.session_state:
         st.session_state.activities = []
 
-    st.title("Resume Builder")
+    st.title("Resume Builder Demo")
     
     # Welcome message
     st.write("""
-    Welcome to the Resume Builder! This tool will help you create a professional resume.
+    Welcome to the Resume Builder Demo! This is a feature-complete demo of our tool to help you create a professional resume. There might be a few bugs at the moment, but we are working through them.
     
     **Required fields**: Name, Email, Phone Number, Short Bio, and at least one complete Work Experience.
     All other sections are optional and can be added as needed.
